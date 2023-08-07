@@ -1,79 +1,46 @@
-version: 2.1
+# Java Gradle CircleCI 2.0 configuration file
+# See: https://circleci.com/docs/language-java/
+version: 2
 
-orbs:
-  win: circleci/windows@2.4.0
-
-workflows:
-  hello-world:
-    jobs:
-      - build
-  integration-tests:
-    jobs:
-      - browser-tests
-      - ui-tests
-
+# Define a job to be invoked later in a workflow.
+# See: https://circleci.com/docs/configuration-reference/#jobs
 jobs:
   build:
-    executor:
-      name: win/default
-    working_directory: C:\Users\circleci\project\HelloWorld
+    # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
+    # See: https://circleci.com/docs/configuration-reference/#docker-machine-macos-windows-executor
+    docker:
+      # specify the version you desire here
+      - image: circleci/openjdk:8-jdk
+
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/circleci-images/
+      # - image: circleci/postgres:9.4
+
+    working_directory: ~/repo
+
+    environment:
+      # Customize the JVM maximum heap limit
+      JVM_OPTS: -Xmx3200m
+      TERM: dumb
+    # Add steps to the job
+    # See: https://circleci.com/docs/configuration-reference/#steps
     steps:
-      - checkout:
-          path: C:\Users\circleci\project
+      - checkout
+
+      # Download and cache dependencies
       - restore_cache:
           keys:
-            - dotnet-packages-v1-{{ checksum "circleci-demo-windows.csproj" }}
-      - run:
-          name: "Install project dependencies"
-          command: dotnet.exe restore
+            - v1-dependencies-{{ checksum "build.gradle" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+
+      - run: gradle dependencies
+
       - save_cache:
           paths:
-            - C:\Users\circleci\project\HelloWorld\.nuget\packages
-          key: dotnet-packages-v1-{{ checksum "circleci-demo-windows.csproj" }}
-      - run:
-          name: "Run Build step"
-          command: dotnet.exe publish -c Release -r win10-x64
-      - run:
-          name: "Test the executable"
-          command: .\bin\Release\netcoreapp2.1\win10-x64\publish\circleci-demo-windows.exe 
-      - store_artifacts:
-          path: .\bin\Release\netcoreapp2.1\win10-x64\publish\circleci-demo-windows.exe
+            - ~/.gradle
+          key: v1-dependencies-{{ checksum "build.gradle" }}
 
-
-  browser-tests:
-    executor:
-      name: win/default
-    steps:
-      - checkout
-      - run:
-          name: Run browser tests
-          command: |
-              cd WebBrowserTestsSample/tests/WebBrowserTests
-              dotnet test
-
-  ui-tests:
-    executor:
-      name: win/default
-      shell: powershell.exe
-    steps:
-      - checkout
-      - run: choco install winappdriver
-      - run: 
-          name: Run winappdriver in background
-          background: true
-          command: | 
-              cd "C:\Program Files (x86)\Windows Application Driver\"
-              Start-Process -FilePath "WinAppDriver.exe" -Wait
-      - run:
-          name: Restore and build
-          command: |
-            cd NotepadTest
-            nuget restore
-            cd "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\msbuild\current\bin\"
-            .\msbuild.exe "C:\Users\circleci\project\NotepadTest\NotepadTest.csproj"
-      - run: 
-          name: Run UI tests
-          command: |
-              cd "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\common7\ide\extensions\TestPlatform"
-              .\vstest.console.exe C:\Users\circleci\project\NotepadTest\bin\debug\NotepadTest.dll
- 
+      # run tests!
+      - run: gradle test
